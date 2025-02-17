@@ -9,9 +9,9 @@ const upload = multer({ storage: storage });
 // Create a new seller
 sellerRoute.post("/create-user", upload.single("governmentIdImage"), async (req, res) => {
   try {
-    const { name, email, password, phoneNumber, location, governmentId } = req.body;
+    const { name, email, password, phoneNumber, location, governmentId ,SellarIdImage} = req.body;
 
-    if (!name || !email || !password || !phoneNumber || !location || !governmentId || !req.file) {
+    if (!name || !email || !password || !phoneNumber || !location || !governmentId ||SellarIdImage || !req.file) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
@@ -26,6 +26,11 @@ sellerRoute.post("/create-user", upload.single("governmentIdImage"), async (req,
         data: req.file.buffer,
         contentType: req.file.mimetype,
       },
+      SellarIdImage: {
+        data: req.file.buffer,
+        contentType: req.file.mimetype,
+      },
+
     });
 
     const savedSeller = await newSeller.save();
@@ -39,9 +44,15 @@ sellerRoute.post("/create-user", upload.single("governmentIdImage"), async (req,
 sellerRoute.post("/login", async (req, res) => {
     const { email, password } = req.body;
     try {
-        const user = await sellerModel.findOne({ email, password });
+        const user = await sellerModel.findOne({ email, password })
+            .select('+isVerified +lastLogin');
         if (user) {
-            res.status(200).json({ message: "Login successful", userId:user._id });
+            res.status(200).json({ 
+                message: "Login successful", 
+                userId: user._id,
+                isVerified: user.isVerified || false,
+                lastLogin: user.lastLogin
+            });
         } else {
             res.status(401).json({ message: "Invalid email or password" });
         }
@@ -50,33 +61,92 @@ sellerRoute.post("/login", async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
 sellerRoute.get("/get-user/:id", async (req, res) => {
   try {
-    const buyer = await sellerModel.findById(req.params.id);
-
-    // Check if buyer exists
-    if (!buyer) {
-      return res.status(404).json({ message: "Buyer not found" });
+    const seller = await sellerModel.findById(req.params.id).select('+isVerified +lastLogin');
+    
+    if (!seller) {
+      return res.status(404).json({ message: "Seller not found" });
     }
 
-    // Convert image buffer to base64
-    const buyerObj = buyer.toObject();
-    if (buyerObj.governmentIdImage && buyerObj.governmentIdImage.data) {
-      buyerObj.governmentIdImage = {
-        data: buyerObj.governmentIdImage.data.toString("base64"),
-        contentType: buyerObj.governmentIdImage.contentType,
+    const sellerObj = seller.toObject();
+    if (sellerObj.governmentIdImage && sellerObj.governmentIdImage.data) {
+      sellerObj.governmentIdImage = {
+        data: sellerObj.governmentIdImage.data.toString("base64"),
+        contentType: sellerObj.governmentIdImage.contentType,
       };
     } else {
-      buyerObj.governmentIdImage = null;
+      sellerObj.governmentIdImage = null;
     }
 
-    res.status(200).json(buyerObj);
+    res.status(200).json(sellerObj);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
 
+sellerRoute.get("/verification-status/:id", async (req, res) => {
+    try {
+        const seller = await sellerModel.findById(req.params.id).select('+isVerified');
+        if (!seller) {
+            return res.status(404).json({ message: "Seller not found" });
+        }
+        res.status(200).json({ 
+            isVerified: seller.isVerified || false,
+            message: seller.isVerified 
+                ? "Your account is verified" 
+                : "Your account is pending verification"
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
 
+sellerRoute.get("/get-photo/:id", async (req, res) => {
+  try {
+    const seller = await sellerModel.findById(req.params.id);
+    
+    if (!seller) {
+      return res.status(404).json({ message: "Seller not found" });
+    }
+
+    const photos = {
+      SellarIdImage: seller.SellarIdImage ? {
+        data: seller.SellarIdImage.data.toString('base64'),
+        contentType: seller.SellarIdImage.contentType
+      } : null
+    };
+
+    res.status(200).json(photos);
+  } catch (error) {
+    console.error("Error fetching seller photos:", error);
+    res.status(500).json({ message: "Error fetching photos" });
+  }
+});
+
+sellerRoute.put("/update-last-login/:id", async (req, res) => {
+  try {
+    const seller = await sellerModel.findByIdAndUpdate(
+      req.params.id,
+      { lastLogin: new Date() },
+      { new: true }
+    );
+    
+    if (!seller) {
+      return res.status(404).json({ message: "Seller not found" });
+    }
+    
+    res.status(200).json({ 
+      message: "Last login updated successfully",
+      lastLogin: seller.lastLogin 
+    });
+  } catch (error) {
+    console.error("Error updating last login:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 module.exports = sellerRoute;

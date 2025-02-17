@@ -11,13 +11,27 @@ const buyerSchema = new mongoose.Schema(
       lowercase: true,
     },
     password: { type: String, required: true },
-    phoneNumber: { type: String, trim: true },
-    location: { type: String, trim: true },
-    governmentId: { type: String, unique: true, trim: true },
+    phoneNumber: { type: String, required: true, trim: true },
+    location: { type: String, required: true, trim: true },
+    governmentId: { type: String, required: true, unique: true, trim: true },
     governmentIdImage: {
       data: Buffer,
       contentType: String,
     },
+    BuyerIdImage: {
+      data: Buffer,
+      contentType: String,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    lastLogin: {
+      type: Date,
+      default: Date.now
+    },
+  
+    
   },
   {
     collection: "BuyerAccountRegistrations",
